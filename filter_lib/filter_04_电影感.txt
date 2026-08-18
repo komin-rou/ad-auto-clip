@@ -1,0 +1,1 @@
+eq=contrast=1.2:saturation=1.15:brightness=0,colorbalance=rs=0.04:gs=-0.02:bs=-0.06,curves=all='0/0 0.3/0.25 0.7/0.75 1/1'

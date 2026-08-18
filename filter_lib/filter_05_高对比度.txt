@@ -1,0 +1,1 @@
+eq=contrast=1.15:saturation=1.05:brightness=0

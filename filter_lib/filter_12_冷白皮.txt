@@ -1,0 +1,1 @@
+eq=contrast=1.05:saturation=0.95:brightness=0.03,colorbalance=rs=-0.04:gs=0.01:bs=0.05

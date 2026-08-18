@@ -1,0 +1,48 @@
+# ============================================================
+# 广告视频自动化混剪 - 配置文件
+# 修改这里的参数即可，不需要动代码
+# 支持多套配置：复制此文件改名（如 config_quick.yaml），运行时加 --config config_quick.yaml
+# ============================================================
+
+# -------------------- 基础路径 --------------------
+base_dir: "D:\\ad_auto"
+
+# -------------------- 输出配置 --------------------
+output_subdir: "毕节七星关区"        # 输出子文件夹名（成品放在 output/此名称/ 下）
+
+# -------------------- 视频参数 --------------------
+speed_rate: 2.0                        # 音视频统一倍速
+target_resolution: "1080:1920"         # 竖屏 9:16 全高清
+target_fps: 30                         # 统一帧率
+
+# 编码器配置：libx264（CPU编码，兼容性好）或 h264_nvenc（NVIDIA显卡硬件加速，快5-10倍）
+video_encoder: "h264_nvenc"
+# libx264 参数
+x264_crf: 23                           # 画质参数，越小画质越高体积越大
+encode_preset: "fast"                  # 编码速度：ultrafast < fast < medium < slow
+# h264_nvenc 参数（NVIDIA硬件加速）
+nvenc_preset: "p4"                     # p1(最快)~p7(最慢质量最好)，p4对应libx264的fast
+nvenc_cq: 23                           # 恒定质量，类似CRF，越小画质越高
+
+# -------------------- 贴纸参数 --------------------
+sticker_alpha: 0.08                    # 贴纸透明度（5%~10%）
+sticker_scale: 0.05                    # 贴纸缩放系数
+sticker_count: 4                       # 随机选几张贴纸
+
+# -------------------- 去重参数 --------------------
+dedup_alpha: 0.03                      # 每层去重图层透明度
+
+# -------------------- 滤镜参数 --------------------
+num_random_filters: 2                  # 随机选几个滤镜组合
+filter_blend_opacity: 0.02             # 滤镜混合强度（2%低透明度）
+
+# -------------------- TTS语音参数 --------------------
+tts_voice: "zh-CN-XiaoxiaoNeural"      # 默认音色（实际会被随机覆盖）
+tts_rate: "+0%"                        # 语速
+tts_volume: "+0%"                      # 音量
+tts_max_retries: 3                     # TTS失败最大重试次数
+
+# -------------------- 文件名约定 --------------------
+tts_text_file: "sub1.txt"              # TTS朗读的完整文本
+subtitle_srt_file: "caption.srt"       # 已切片好的字幕文件
+subtitle_param_file: "filter_parameter.txt"  # 字幕滤镜参数文件

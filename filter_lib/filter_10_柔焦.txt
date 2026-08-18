@@ -1,0 +1,1 @@
+gblur=sigma=0.8,eq=contrast=1.05:saturation=1.05

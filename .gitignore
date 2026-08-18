@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# 运行产物
+output/
+temp/
+logs/
+
+# 系统文件
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# 大体积素材（如需版本控制请自行移除对应行）
+raw_clips/
+dedup_videos/
+font_lib/
+sticker_lib/

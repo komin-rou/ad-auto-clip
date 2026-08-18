@@ -1,0 +1,9 @@
+# edge-tts 中文音色库
+# 格式：音色ID|说明
+# 每行一个，#开头是注释
+zh-CN-XiaoxiaoNeural|晓晓（女声，温柔自然，默认）
+zh-CN-YunxiNeural|云希（男声，阳光年轻）
+zh-CN-XiaoyiNeural|晓伊（女声，可爱活泼）
+zh-CN-YunyangNeural|云扬（男声，新闻播报风）
+zh-CN-XiaohanNeural|晓涵（女声，成熟知性）
+zh-CN-YunjianNeural|云健（男声，沉稳有力）
