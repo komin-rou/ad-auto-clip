@@ -26,6 +26,7 @@ from libraries import (
 )
 from tts import generate_tts
 from subtitle import generate_srt, read_subtitle_filter_param
+from deepseek_subtitle import generate_srt_deepseek
 from video_processor import preprocess_clip, join_clips, slice_dedup_videos
 from effects import build_final_filter_complex
 from output_manager import ensure_output_dir, write_params_record
@@ -120,13 +121,26 @@ class VideoPipeline:
         """步骤2：准备字幕文件 + 随机选字体 + 生成字幕滤镜参数"""
         logger.info("\n===== 步骤2：准备字幕文件 =====")
         user_srt_path = os.path.join(config.SUBTITLE_DIR, config.SUBTITLE_SRT_FILE)
+
         if os.path.exists(user_srt_path):
+            # 优先使用用户手动提供的 caption.srt
             ctx.srt_path = user_srt_path
             logger.info(f"使用用户提供的字幕文件：{ctx.srt_path}")
         else:
+            # 没有用户srt，根据配置的模式自动生成
             ctx.srt_path = os.path.join(config.TEMP_DIR, "auto_subtitle.srt")
-            logger.info(f"未找到 {config.SUBTITLE_SRT_FILE}，自动生成字幕...")
-            generate_srt(ctx.tts_text, ctx.tts_duration, ctx.srt_path)
+            mode = config.SUBTITLE_MODE.lower()
+
+            if mode == "deepseek":
+                logger.info(f"未找到 {config.SUBTITLE_SRT_FILE}，使用 DeepSeek 大模型智能切割字幕...")
+                generate_srt_deepseek(ctx.tts_text, ctx.tts_duration, ctx.srt_path)
+            elif mode == "regex":
+                logger.info(f"未找到 {config.SUBTITLE_SRT_FILE}，使用正则分句生成字幕...")
+                generate_srt(ctx.tts_text, ctx.tts_duration, ctx.srt_path)
+            else:
+                # manual 模式：只认用户提供的srt，没有就报错
+                logger.error(f"subtitle_mode=manual 但未找到 {config.SUBTITLE_SRT_FILE}，请手动提供字幕文件")
+                raise SystemExit(1)
 
         param_file_path = os.path.join(config.SUBTITLE_DIR, config.SUBTITLE_PARAM_FILE)
         ctx.subtitle_filter = read_subtitle_filter_param(param_file_path, ctx.srt_path)

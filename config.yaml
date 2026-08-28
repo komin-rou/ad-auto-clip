@@ -46,3 +46,13 @@ tts_max_retries: 3                     # TTS失败最大重试次数
 tts_text_file: "sub1.txt"              # TTS朗读的完整文本
 subtitle_srt_file: "caption.srt"       # 已切片好的字幕文件
 subtitle_param_file: "filter_parameter.txt"  # 字幕滤镜参数文件
+
+# -------------------- DeepSeek 字幕切割 --------------------
+# 用大模型把长文本智能切割成SRT字幕（比正则分句更自然）
+# 没有 caption.srt 时自动启用；API key 留空则降级为正则分句
+deepseek_api_key: ""                    # 你的DeepSeek API Key（sk-开头），请勿提交真实key到公开仓库
+deepseek_base_url: "https://api.deepseek.com"
+deepseek_model: "deepseek-chat"
+deepseek_max_retries: 3                 # 失败重试次数
+deepseek_max_chars_per_line: 15         # 每条字幕最大字数
+subtitle_mode: "deepseek"               # deepseek=大模型切割 / regex=正则分句 / manual=只用用户提供的srt

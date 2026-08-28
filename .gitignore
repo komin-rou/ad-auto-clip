@@ -29,3 +29,6 @@ raw_clips/
 dedup_videos/
 font_lib/
 sticker_lib/
+
+# 素材压缩包
+*.zip

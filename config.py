@@ -69,6 +69,14 @@ class AppConfig:
         self.SUBTITLE_SRT_FILE = data.get("subtitle_srt_file", "caption.srt")
         self.SUBTITLE_PARAM_FILE = data.get("subtitle_param_file", "filter_parameter.txt")
 
+        # DeepSeek 字幕切割配置
+        self.DEEPSEEK_API_KEY = data.get("deepseek_api_key", "")
+        self.DEEPSEEK_BASE_URL = data.get("deepseek_base_url", "https://api.deepseek.com")
+        self.DEEPSEEK_MODEL = data.get("deepseek_model", "deepseek-chat")
+        self.DEEPSEEK_MAX_RETRIES = data.get("deepseek_max_retries", 3)
+        self.DEEPSEEK_MAX_CHARS_PER_LINE = data.get("deepseek_max_chars_per_line", 15)
+        self.SUBTITLE_MODE = data.get("subtitle_mode", "deepseek")  # deepseek / regex / manual
+
         # NVENC可用性检测：如果配置了h264_nvenc但驱动不支持，自动降级为libx264
         if self.VIDEO_ENCODER == "h264_nvenc" and not self._check_nvenc_available():
             print("[警告] NVIDIA NVENC不可用（驱动版本过旧，需610.00+），自动降级为libx264 CPU编码")
