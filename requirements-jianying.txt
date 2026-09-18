@@ -1,0 +1,2 @@
+pyJianYingDraft==0.3.0
+pymediainfo>=6,<7

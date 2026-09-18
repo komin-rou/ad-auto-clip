@@ -5,10 +5,10 @@
 # ============================================================
 
 # -------------------- 基础路径 --------------------
-base_dir: "D:\\ad_auto"
+base_dir: "."                         # 相对本配置文件所在目录解析
 
 # -------------------- 输出配置 --------------------
-output_subdir: "毕节七星关区"        # 输出子文件夹名（成品放在 output/此名称/ 下）
+output_subdir: "示例任务"            # 输出子文件夹名（成品放在 output/此名称/ 下）
 
 # -------------------- 视频参数 --------------------
 speed_rate: 2.0                        # 音视频统一倍速
@@ -16,7 +16,7 @@ target_resolution: "1080:1920"         # 竖屏 9:16 全高清
 target_fps: 30                         # 统一帧率
 
 # 编码器配置：libx264（CPU编码，兼容性好）或 h264_nvenc（NVIDIA显卡硬件加速，快5-10倍）
-video_encoder: "h264_nvenc"
+video_encoder: "libx264"
 # libx264 参数
 x264_crf: 23                           # 画质参数，越小画质越高体积越大
 encode_preset: "fast"                  # 编码速度：ultrafast < fast < medium < slow
@@ -49,10 +49,36 @@ subtitle_param_file: "filter_parameter.txt"  # 字幕滤镜参数文件
 
 # -------------------- DeepSeek 字幕切割 --------------------
 # 用大模型把长文本智能切割成SRT字幕（比正则分句更自然）
-# 没有 caption.srt 时自动启用；API key 留空则降级为正则分句
-deepseek_api_key: ""                    # 你的DeepSeek API Key（sk-开头），请勿提交真实key到公开仓库
+# 没有 caption.srt 时自动启用；API Key 从本机 .env 的 DEEPSEEK_API_KEY 读取
 deepseek_base_url: "https://api.deepseek.com"
 deepseek_model: "deepseek-chat"
 deepseek_max_retries: 3                 # 失败重试次数
 deepseek_max_chars_per_line: 15         # 每条字幕最大字数
 subtitle_mode: "deepseek"               # deepseek=大模型切割 / regex=正则分句 / manual=只用用户提供的srt
+subtitle_max_chars_per_line: 12           # 每行最多字符数，每帧最多两行
+subtitle_down_ratio: 0.235                # 累计下移23.5%：先15%，再相对下移10%
+subtitle_font_size: 15                    # 在原14号基础上增大一号
+
+# -------------------- 地点与文案 --------------------
+locations_file: "地区.xlsx"       # 可改为绝对路径；相对路径基于 base_dir
+location_row: 1
+facts_file: "facts.yaml"
+copy_target_chars: 110
+copy_max_retries: 3
+
+# -------------------- 真实时间戳与人物剪辑 --------------------
+tts_provider: "edge"
+tts_cache: true
+person_detection_enabled: true
+person_model: "yolo11n.pt"
+person_confidence: 0.35
+person_sample_fps: 2.0
+person_interval_gap: 0.75
+person_min_interval: 0.5
+preferred_speed: 2.0
+minimum_speed: 1.0
+
+# -------------------- 剪映可编辑草稿与批量 --------------------
+jianying_draft_enabled: true
+jianying_draft_name: "editable"
+batch_max_retries: 2

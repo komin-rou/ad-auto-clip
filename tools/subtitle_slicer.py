@@ -6,9 +6,10 @@
 
 import os
 import re
+from pathlib import Path
 
 # ====================== 【配置区】 ======================
-BASE_DIR = r"D:\ad_auto"
+BASE_DIR = str(Path(__file__).resolve().parents[1])
 SUBTITLE_DIR = os.path.join(BASE_DIR, "subtitles")
 
 # 输入：完整文本文件
@@ -143,4 +144,4 @@ if __name__ == "__main__":
     print("\n===== 完成 =====")
     print(f"下一步：把 {OUTPUT_CAPTION_FILE} 改名为 caption.srt")
     print(f"      把 {OUTPUT_PARAM_FILE} 改名为 filter_parameter.txt")
-    print("      然后运行 auto_edit.py 即可")
+    print("      然后运行 main.py 即可")

@@ -7,6 +7,7 @@ __pycache__/
 venv/
 .venv/
 env/
+venv_backup_*/
 
 # IDE
 .idea/
@@ -14,10 +15,20 @@ env/
 *.swp
 *.swo
 
+# 本机密钥
+.env
+
+# 本机业务配置与地点数据（公开仓库只提交示例）
+/facts.yaml
+/地区.xlsx
+
 # 运行产物
 output/
 temp/
 logs/
+/resource_manifest.json
+/subtitles/deepseek_generated.srt
+/subtitles/sub1.txt
 
 # 系统文件
 Thumbs.db
@@ -32,3 +43,13 @@ sticker_lib/
 
 # 素材压缩包
 *.zip
+
+# 运行时自动下载的视觉模型
+yolo*.pt
+
+# 本机 Python 修复辅助脚本（含机器专用解释器路径）
+/repair_python310.cmd
+/repair_python310.ps1
+
+# Local development notes generated during implementation
+/docs/superpowers/

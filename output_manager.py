@@ -15,9 +15,7 @@ def ensure_output_dir(output_name: str) -> str:
     :param output_name: 输出子目录名
     :return: 输出目录绝对路径
     """
-    # 临时修改 config 的输出子目录名，让 OUTPUT_DIR 动态指向对应目录
-    config.OUTPUT_SUBDIR = output_name
-    output_dir = config.OUTPUT_DIR
+    output_dir = os.path.join(config.OUTPUT_ROOT, output_name)
     make_dir_safe(output_dir)
     return output_dir
 

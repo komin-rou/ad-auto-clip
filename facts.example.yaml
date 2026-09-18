@@ -1,0 +1,12 @@
+required_phrases:
+  - "实体工厂"
+  - "上门测量"
+  - "专业设计"
+  - "3D 效果图"
+  - "上门安装"
+forbidden_claims:
+  - "全国最低价"
+  - "绝对有效"
+  - "终身质保"
+reject_unknown_numbers: true
+target_chars: 110

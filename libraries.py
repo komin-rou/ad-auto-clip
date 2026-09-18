@@ -50,8 +50,9 @@ def pick_random_font() -> str:
     # 扫描字体库，匹配 FONT_NAME_MAP 中的字体
     available_fonts = []
     for fname in os.listdir(config.FONT_LIB_DIR):
-        if fname.lower().endswith((".ttf", ".otf")) and fname in config.FONT_NAME_MAP:
-            available_fonts.append(config.FONT_NAME_MAP[fname])
+        key = fname.lower()
+        if key.endswith((".ttf", ".otf")) and key in config.FONT_NAME_MAP:
+            available_fonts.append(config.FONT_NAME_MAP[key])
     if not available_fonts:
         logger.info("字体库中无可用字体，使用默认字体 SimHei")
         return "SimHei"
@@ -90,10 +91,16 @@ def pick_random_stickers(count: int = None) -> list:
     """
     if count is None:
         count = config.STICKER_COUNT
+    if count < 0:
+        raise ValueError("贴纸数量不能小于 0")
+    if count == 0:
+        logger.info("贴纸数量为0，本次不添加贴纸")
+        return []
     sticker_list = get_target_files(config.STICKER_DIR, ".png")
     if len(sticker_list) < count:
-        logger.info(f"错误：{config.STICKER_DIR} 内PNG贴纸不足{count}张，当前仅有{len(sticker_list)}张")
-        raise SystemExit(1)
+        raise ValueError(
+            f"{config.STICKER_DIR} 内PNG贴纸不足{count}张，当前仅有{len(sticker_list)}张"
+        )
     selected = random.sample(sticker_list, count)
     logger.info(f"随机选中{count}张贴纸：")
     for s in selected:

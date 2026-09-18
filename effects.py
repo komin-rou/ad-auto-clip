@@ -7,6 +7,37 @@ from config import config
 from logger import logger
 
 
+def build_sticker_positions(count: int) -> list:
+    """Return safe FFmpeg overlay positions for any non-negative count."""
+    if count < 0:
+        raise ValueError("贴纸数量不能小于 0")
+    if count == 0:
+        return []
+    if count == 1:
+        return [("W-w-10", "10")]
+    if count == 2:
+        return [("10", "10"), ("W-w-10", "H-h-10")]
+
+    corners = [
+        ("10", "10"),
+        ("W-w-10", "10"),
+        ("10", "H-h-10"),
+        ("W-w-10", "H-h-10"),
+    ]
+    if count <= 4:
+        return corners[:count]
+
+    positions = list(corners)
+    remaining = count - 4
+    for index in range(remaining):
+        fraction = index + 1
+        denominator = remaining + 1
+        x_pos = f"(W-w)*{fraction}/{denominator}"
+        y_pos = "10" if index % 2 == 0 else "H-h-10"
+        positions.append((x_pos, y_pos))
+    return positions
+
+
 def build_dedup_chain(dedup_clips: list, start_input_idx: int, base_stream: str) -> tuple:
     """
     构建多层去重 blend 叠加链
@@ -63,42 +94,60 @@ def build_filter_chain(selected_filters: list, base_stream: str) -> tuple:
     return filter_segments, "[filtered]"
 
 
-def build_sticker_chain(sticker_paths: list, corner_positions: list, start_input_idx: int, base_stream: str) -> tuple:
+def build_sticker_chain(
+    sticker_paths: list,
+    corner_positions: list,
+    start_input_idx: int,
+    base_stream: str,
+    sticker_scale: float = None,
+    sticker_alpha: float = None,
+) -> tuple:
     """
     构建四张贴纸 overlay 叠加链
     每张贴纸先 scale 缩放 + colorchannelmixer 调透明度，然后 overlay 到对应角落
     注意：overlay 绝对不能加 shortest=1，否则会导致 frame=0 黑屏
     :param sticker_paths: 贴纸路径列表（4张）
-    :param corner_positions: 四角位置配置 [(x, y, 路径), ...]
+    :param corner_positions: 位置配置 [(x, y), ...]
     :param start_input_idx: 起始输入流索引
     :param base_stream: 基础流标签
     :return: (额外的-i参数列表, 滤镜链片段列表, 最终输出标签, 下一个可用输入索引)
     """
+    if len(sticker_paths) != len(corner_positions):
+        raise ValueError("贴纸路径数量与布局位置数量不一致")
+    if not sticker_paths:
+        return [], [], base_stream, start_input_idx
+
+    if sticker_scale is None:
+        sticker_scale = config.STICKER_SCALE if config.is_bound else 0.05
+    if sticker_alpha is None:
+        sticker_alpha = config.STICKER_ALPHA if config.is_bound else 0.08
+
     extra_inputs = []
     filter_segments = []
     current_stream = base_stream
     sticker_start_idx = start_input_idx
 
     # 第一步：预处理每张贴纸（缩放+透明度），同时添加 -i 输入
-    for idx, (x_pos, y_pos, stk_path) in enumerate(corner_positions):
+    for idx, (stk_path, position) in enumerate(zip(sticker_paths, corner_positions)):
+        x_pos, y_pos = position
         input_idx = sticker_start_idx + idx
-        extra_inputs.extend(["-i", stk_path])
+        extra_inputs.extend(["-loop", "1", "-i", stk_path])
         filter_segments.append(
-            f"[{input_idx}:v]scale=iw*{config.STICKER_SCALE}:ih*{config.STICKER_SCALE},"
-            f"colorchannelmixer=aa={config.STICKER_ALPHA}[stk{input_idx}]"
+            f"[{input_idx}:v]scale=iw*{sticker_scale}:ih*{sticker_scale},"
+            f"colorchannelmixer=aa={sticker_alpha}[stk{input_idx}]"
         )
 
     # 第二步：逐层 overlay 叠加四张贴纸到四个角落
-    for idx in range(4):
+    for idx in range(len(sticker_paths)):
         input_idx = sticker_start_idx + idx
-        x_pos, y_pos, _ = corner_positions[idx]
+        x_pos, y_pos = corner_positions[idx]
         out_label = f"[tmp{input_idx}]"
         filter_segments.append(
             f"{current_stream}[stk{input_idx}]overlay=x={x_pos}:y={y_pos}{out_label}"
         )
         current_stream = out_label
 
-    next_input_idx = sticker_start_idx + 4
+    next_input_idx = sticker_start_idx + len(sticker_paths)
     return extra_inputs, filter_segments, current_stream, next_input_idx
 
 
@@ -126,13 +175,7 @@ def build_final_filter_complex(
     input_cmds = ["ffmpeg", "-y", "-i", base_video, "-i", tts_audio]
     all_filter_segments = []
 
-    # 四角位置配置（左上、右上、左下、右下）
-    corner_positions = [
-        ("10", "10", sticker_paths[0]),
-        ("W-w-10", "10", sticker_paths[1]),
-        ("10", "H-h-10", sticker_paths[2]),
-        ("W-w-10", "H-h-10", sticker_paths[3]),
-    ]
+    corner_positions = build_sticker_positions(len(sticker_paths))
 
     # 第1层：去重叠加（输入索引从2开始）
     dedup_inputs, dedup_segments, current_stream, next_idx = build_dedup_chain(

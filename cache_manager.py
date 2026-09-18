@@ -8,14 +8,11 @@ import json
 import hashlib
 import shutil
 
-from config import config
-
-
 class CacheManager:
     """中间产物缓存管理器"""
 
-    def __init__(self):
-        self.cache_dir = os.path.join(config.TEMP_DIR, "cache")
+    def __init__(self, cache_dir: str):
+        self.cache_dir = os.path.abspath(cache_dir)
         self.index_file = os.path.join(self.cache_dir, "cache_index.json")
         os.makedirs(self.cache_dir, exist_ok=True)
         self._index = self._load_index()
@@ -91,5 +88,12 @@ class CacheManager:
         print("缓存已清空")
 
 
-# 全局单例
-cache_manager = CacheManager()
+_instances = {}
+
+
+def get_cache_manager(cache_dir: str) -> CacheManager:
+    """Create the cache lazily after application bootstrap."""
+    key = os.path.abspath(cache_dir)
+    if key not in _instances:
+        _instances[key] = CacheManager(key)
+    return _instances[key]

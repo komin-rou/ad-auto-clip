@@ -1,166 +1,237 @@
+"""Pure application configuration loading.
+
+Importing this module never probes FFmpeg, creates directories, or opens log
+files. The executable entry point loads and binds a configuration explicitly.
 """
-全局配置模块
-从 config.yaml 读取配置，支持多套配置切换
-用法：
-  from config import config
-  config.OUTPUT_SUBDIR  # 访问配置
-"""
+from __future__ import annotations
+
 import os
+from collections.abc import Mapping
+from pathlib import Path
+from typing import Any
+
 import yaml
 
 
+def _read_dotenv(path: Path) -> dict[str, str]:
+    """Read the small KEY=VALUE subset needed by this project."""
+    values: dict[str, str] = {}
+    if not path.is_file():
+        return values
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
+            value = value[1:-1]
+        if key:
+            values[key] = value
+    return values
+
+
 class AppConfig:
-    """应用全局配置类，从YAML文件读取"""
+    """Application settings loaded without runtime side effects."""
 
-    def __init__(self, config_path: str = None):
-        # 默认配置文件路径
+    def __init__(self, config_path: str | None = None, environ: Mapping[str, str] | None = None):
         if config_path is None:
-            config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.yaml")
+            config_path = str(Path(__file__).with_name("config.yaml"))
+        loaded = self.from_file(config_path, environ=environ)
+        self.__dict__.update(loaded.__dict__)
 
-        self._config_path = config_path
-        self._load_from_yaml()
-        self._init_derived_paths()
+    @classmethod
+    def from_file(
+        cls,
+        config_path: str,
+        environ: Mapping[str, str] | None = None,
+    ) -> "AppConfig":
+        path = Path(config_path).resolve()
+        if not path.is_file():
+            raise FileNotFoundError(f"配置文件不存在：{path}")
 
-    def _load_from_yaml(self):
-        """从YAML文件加载配置"""
-        if not os.path.exists(self._config_path):
-            raise FileNotFoundError(f"配置文件不存在：{self._config_path}")
+        with path.open("r", encoding="utf-8") as handle:
+            data = yaml.safe_load(handle) or {}
+        if not isinstance(data, dict):
+            raise ValueError(f"配置文件顶层必须是对象：{path}")
 
-        with open(self._config_path, "r", encoding="utf-8") as f:
-            data = yaml.safe_load(f)
+        env = _read_dotenv(path.with_name(".env"))
+        env.update(dict(os.environ if environ is None else environ))
 
-        # 基础路径
-        self.BASE_DIR = data.get("base_dir", r"D:\ad_auto")
+        instance = cls.__new__(cls)
+        instance._config_path = str(path)
+        instance._apply(data, env)
+        instance.validate()
+        return instance
 
-        # 输出配置
-        self.OUTPUT_SUBDIR = data.get("output_subdir", "默认项目")
+    def _apply(self, data: dict[str, Any], env: Mapping[str, str]) -> None:
+        config_dir = Path(self._config_path).parent
 
-        # 视频参数
-        self.SPEED_RATE = data.get("speed_rate", 2.0)
-        self.TARGET_RESOLUTION = data.get("target_resolution", "1080:1920")
-        self.TARGET_FPS = data.get("target_fps", 30)
-        # 编码器配置
-        self.VIDEO_ENCODER = data.get("video_encoder", "libx264")  # libx264 或 h264_nvenc
-        self.X264_CRF = data.get("x264_crf", 23)
-        self.ENCODE_PRESET = data.get("encode_preset", "fast")
-        self.NVENC_PRESET = data.get("nvenc_preset", "p4")
-        self.NVENC_CQ = data.get("nvenc_cq", 23)
+        def resolve_path(value: str | os.PathLike[str], base: Path) -> str:
+            candidate = Path(value)
+            if not candidate.is_absolute():
+                candidate = base / candidate
+            return str(candidate.resolve())
 
-        # 贴纸参数
-        self.STICKER_ALPHA = data.get("sticker_alpha", 0.08)
-        self.STICKER_SCALE = data.get("sticker_scale", 0.05)
-        self.STICKER_COUNT = data.get("sticker_count", 4)
+        self.BASE_DIR = resolve_path(str(data.get("base_dir", ".")), config_dir)
+        self.OUTPUT_SUBDIR = str(data.get("output_subdir", "默认项目"))
 
-        # 去重参数
-        self.DEDUP_ALPHA = data.get("dedup_alpha", 0.03)
+        self.SPEED_RATE = float(data.get("speed_rate", 2.0))
+        self.TARGET_RESOLUTION = str(data.get("target_resolution", "1080:1920"))
+        self.TARGET_FPS = int(data.get("target_fps", 30))
+        self.VIDEO_ENCODER = str(data.get("video_encoder", "libx264"))
+        self.X264_CRF = int(data.get("x264_crf", 23))
+        self.ENCODE_PRESET = str(data.get("encode_preset", "fast"))
+        self.NVENC_PRESET = str(data.get("nvenc_preset", "p4"))
+        self.NVENC_CQ = int(data.get("nvenc_cq", 23))
 
-        # 滤镜参数
-        self.NUM_RANDOM_FILTERS = data.get("num_random_filters", 2)
-        self.FILTER_BLEND_OPACITY = data.get("filter_blend_opacity", 0.02)
+        self.STICKER_ALPHA = float(data.get("sticker_alpha", 0.08))
+        self.STICKER_SCALE = float(data.get("sticker_scale", 0.05))
+        self.STICKER_COUNT = int(data.get("sticker_count", 4))
+        self.DEDUP_ALPHA = float(data.get("dedup_alpha", 0.03))
+        self.NUM_RANDOM_FILTERS = int(data.get("num_random_filters", 2))
+        self.FILTER_BLEND_OPACITY = float(data.get("filter_blend_opacity", 0.02))
 
-        # TTS参数
-        self.TTS_VOICE = data.get("tts_voice", "zh-CN-XiaoxiaoNeural")
-        self.TTS_RATE = data.get("tts_rate", "+0%")
-        self.TTS_VOLUME = data.get("tts_volume", "+0%")
-        self.TTS_MAX_RETRIES = data.get("tts_max_retries", 3)
+        self.TTS_VOICE = str(data.get("tts_voice", "zh-CN-XiaoxiaoNeural"))
+        self.TTS_RATE = str(data.get("tts_rate", "+0%"))
+        self.TTS_VOLUME = str(data.get("tts_volume", "+0%"))
+        self.TTS_MAX_RETRIES = int(data.get("tts_max_retries", 3))
 
-        # 文件名约定
-        self.TTS_TEXT_FILE = data.get("tts_text_file", "sub1.txt")
-        self.SUBTITLE_SRT_FILE = data.get("subtitle_srt_file", "caption.srt")
-        self.SUBTITLE_PARAM_FILE = data.get("subtitle_param_file", "filter_parameter.txt")
+        self.TTS_TEXT_FILE = str(data.get("tts_text_file", "sub1.txt"))
+        self.SUBTITLE_SRT_FILE = str(data.get("subtitle_srt_file", "caption.srt"))
+        self.SUBTITLE_PARAM_FILE = str(data.get("subtitle_param_file", "filter_parameter.txt"))
 
-        # DeepSeek 字幕切割配置
-        self.DEEPSEEK_API_KEY = data.get("deepseek_api_key", "")
-        self.DEEPSEEK_BASE_URL = data.get("deepseek_base_url", "https://api.deepseek.com")
-        self.DEEPSEEK_MODEL = data.get("deepseek_model", "deepseek-chat")
-        self.DEEPSEEK_MAX_RETRIES = data.get("deepseek_max_retries", 3)
-        self.DEEPSEEK_MAX_CHARS_PER_LINE = data.get("deepseek_max_chars_per_line", 15)
-        self.SUBTITLE_MODE = data.get("subtitle_mode", "deepseek")  # deepseek / regex / manual
+        # Secrets only come from the process environment or an ignored .env file.
+        self.DEEPSEEK_API_KEY = str(env.get("DEEPSEEK_API_KEY", "")).strip()
+        self.DEEPSEEK_BASE_URL = str(data.get("deepseek_base_url", "https://api.deepseek.com"))
+        self.DEEPSEEK_MODEL = str(data.get("deepseek_model", "deepseek-chat"))
+        self.DEEPSEEK_MAX_RETRIES = int(data.get("deepseek_max_retries", 3))
+        self.DEEPSEEK_MAX_CHARS_PER_LINE = int(data.get("deepseek_max_chars_per_line", 15))
+        self.SUBTITLE_MODE = str(data.get("subtitle_mode", "deepseek"))
+        self.SUBTITLE_MAX_CHARS_PER_LINE = int(data.get("subtitle_max_chars_per_line", 12))
+        self.SUBTITLE_DOWN_RATIO = float(data.get("subtitle_down_ratio", 0.235))
+        self.SUBTITLE_FONT_SIZE = int(data.get("subtitle_font_size", 15))
 
-        # NVENC可用性检测：如果配置了h264_nvenc但驱动不支持，自动降级为libx264
-        if self.VIDEO_ENCODER == "h264_nvenc" and not self._check_nvenc_available():
-            print("[警告] NVIDIA NVENC不可用（驱动版本过旧，需610.00+），自动降级为libx264 CPU编码")
-            print("[提示] 请更新NVIDIA显卡驱动以启用硬件加速，速度可提升5-10倍")
-            self.VIDEO_ENCODER = "libx264"
+        self.LOCATIONS_FILE = resolve_path(
+            str(data.get("locations_file", "地区.xlsx")), Path(self.BASE_DIR)
+        )
+        facts_file = str(data.get("facts_file", "facts.yaml"))
+        self.FACTS_FILE = resolve_path(facts_file, Path(self.BASE_DIR))
+        self.LOCATION_ROW = int(data.get("location_row", 1))
+        self.COPY_TARGET_CHARS = int(data.get("copy_target_chars", 110))
+        self.COPY_MAX_RETRIES = int(data.get("copy_max_retries", 3))
+        self.TTS_PROVIDER = str(data.get("tts_provider", "edge"))
+        self.TTS_CACHE = bool(data.get("tts_cache", True))
+        self.PERSON_DETECTION_ENABLED = bool(data.get("person_detection_enabled", True))
+        self.PERSON_MODEL = str(data.get("person_model", "yolo11n.pt"))
+        self.PERSON_CONFIDENCE = float(data.get("person_confidence", 0.35))
+        self.PERSON_SAMPLE_FPS = float(data.get("person_sample_fps", 2.0))
+        self.PERSON_INTERVAL_GAP = float(data.get("person_interval_gap", 0.75))
+        self.PERSON_MIN_INTERVAL = float(data.get("person_min_interval", 0.5))
+        self.PREFERRED_SPEED = float(data.get("preferred_speed", data.get("speed_rate", 2.0)))
+        self.MINIMUM_SPEED = float(data.get("minimum_speed", 1.0))
+        self.SUPPLIED_SCRIPT = None
 
-    def _check_nvenc_available(self) -> bool:
-        """检测NVENC硬件编码器是否可用（跑一帧测试视频）"""
-        import subprocess
-        try:
-            test_cmd = [
-                "ffmpeg", "-y", "-f", "lavfi", "-i", "color=c=black:s=128x128:d=1",
-                "-c:v", "h264_nvenc", "-preset", "p4", "-f", "null", "-"
-            ]
-            result = subprocess.run(
-                test_cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                timeout=10
-            )
-            return result.returncode == 0
-        except Exception:
-            return False
+        self.JIANYING_DRAFT_ENABLED = bool(data.get("jianying_draft_enabled", True))
+        self.JIANYING_DRAFT_NAME = str(data.get("jianying_draft_name", "editable"))
+        self.BATCH_MAX_RETRIES = int(data.get("batch_max_retries", 2))
 
-    def _init_derived_paths(self):
-        """初始化基于BASE_DIR的派生路径"""
-        # 素材目录
         self.RAW_VIDEO_DIR = os.path.join(self.BASE_DIR, "raw_clips")
         self.DEDUP_DIR = os.path.join(self.BASE_DIR, "dedup_videos")
         self.FILTER_LIB_DIR = os.path.join(self.BASE_DIR, "filter_lib")
         self.STICKER_DIR = os.path.join(self.BASE_DIR, "sticker_lib")
         self.SUBTITLE_DIR = os.path.join(self.BASE_DIR, "subtitles")
         self.TEMP_DIR = os.path.join(self.BASE_DIR, "temp")
-
-        # 库目录
+        self.OUTPUT_ROOT = os.path.join(self.BASE_DIR, "output")
         self.VOICE_LIB_DIR = os.path.join(self.BASE_DIR, "voice_lib")
         self.VOICE_LIB_FILE = os.path.join(self.VOICE_LIB_DIR, "voices.txt")
         self.FONT_LIB_DIR = os.path.join(self.BASE_DIR, "font_lib")
 
-        # 字体文件名 → 字体名映射（libass通过字体名查找，不是文件名）
         self.FONT_NAME_MAP = {
-            "simhei.ttf": "SimHei",           # 黑体
-            "simkai.ttf": "KaiTi",            # 楷体
-            "simfang.ttf": "FangSong",        # 仿宋
-            "SIMLI.TTF": "LiSu",              # 隶书
-            "SIMYOU.TTF": "YouYuan",          # 幼圆
-            "STCAIYUN.TTF": "STCaiyun",       # 华文彩云
-            "STLITI.TTF": "STLiti",           # 华文隶书
-            "STKAITI.TTF": "STKaiti",         # 华文楷体
-            "STXIHEI.TTF": "STXihei",         # 华文细黑
-            "STSONG.TTF": "STSong",           # 华文宋体
-            "STFANGSO.TTF": "STFangsong",     # 华文仿宋
+            "simhei.ttf": "SimHei",
+            "simkai.ttf": "KaiTi",
+            "simfang.ttf": "FangSong",
+            "simli.ttf": "LiSu",
+            "simyou.ttf": "YouYuan",
+            "stcaiyun.ttf": "STCaiyun",
+            "stliti.ttf": "STLiti",
+            "stkaiti.ttf": "STKaiti",
+            "stxihei.ttf": "STXihei",
+            "stsong.ttf": "STSong",
+            "stfangso.ttf": "STFangsong",
         }
 
-    @property
-    def OUTPUT_DIR(self):
-        """最终输出目录，动态根据输出子目录名生成：output/子目录名/"""
-        return os.path.join(self.BASE_DIR, "output", self.OUTPUT_SUBDIR)
+    def validate(self) -> None:
+        if self.SPEED_RATE <= 0:
+            raise ValueError("speed_rate 必须大于 0")
+        if self.TARGET_FPS <= 0:
+            raise ValueError("target_fps 必须大于 0")
+        if self.STICKER_COUNT < 0:
+            raise ValueError("sticker_count 不能小于 0")
+        if self.VIDEO_ENCODER not in {"libx264", "h264_nvenc"}:
+            raise ValueError("video_encoder 仅支持 libx264 或 h264_nvenc")
+        if not 0 < self.MINIMUM_SPEED <= self.PREFERRED_SPEED:
+            raise ValueError("minimum_speed 必须大于0且不能超过 preferred_speed")
+        if self.PREFERRED_SPEED > 2.0:
+            raise ValueError("preferred_speed 不能超过 2.0")
+        if self.LOCATION_ROW < 1:
+            raise ValueError("location_row 必须从 1 开始")
+        if not 0 < self.PERSON_CONFIDENCE <= 1:
+            raise ValueError("person_confidence 必须在 0 到 1 之间")
+        if self.SUBTITLE_MAX_CHARS_PER_LINE < 1:
+            raise ValueError("subtitle_max_chars_per_line 必须大于 0")
+        if not 0 <= self.SUBTITLE_DOWN_RATIO < 1:
+            raise ValueError("subtitle_down_ratio 必须在 0 到 1 之间")
+        if self.SUBTITLE_FONT_SIZE < 1:
+            raise ValueError("subtitle_font_size 必须大于 0")
+        if self.JIANYING_DRAFT_NAME != "editable":
+            raise ValueError("当前 jianying_draft_name 必须为 editable")
+        if self.BATCH_MAX_RETRIES < 0:
+            raise ValueError("batch_max_retries 不能小于 0")
 
-    def get_video_encode_args(self) -> list:
-        """
-        根据配置的编码器返回FFmpeg视频编码参数列表
-        libx264: [-c:v, libx264, -preset, fast, -crf, 23]
-        h264_nvenc: [-c:v, h264_nvenc, -preset, p4, -cq, 23]
-        用法：ffmpeg_cmd.extend(config.get_video_encode_args())
-        """
+    @property
+    def OUTPUT_DIR(self) -> str:
+        return os.path.join(self.OUTPUT_ROOT, self.OUTPUT_SUBDIR)
+
+    def get_video_encode_args(self) -> list[str]:
         if self.VIDEO_ENCODER == "h264_nvenc":
             return [
                 "-c:v", "h264_nvenc",
                 "-preset", self.NVENC_PRESET,
                 "-cq", str(self.NVENC_CQ),
             ]
-        else:
-            return [
-                "-c:v", "libx264",
-                "-preset", self.ENCODE_PRESET,
-                "-crf", str(self.X264_CRF),
-            ]
-
-    def reload(self):
-        """重新加载配置文件（运行时修改YAML后调用）"""
-        self._load_from_yaml()
-        self._init_derived_paths()
+        return [
+            "-c:v", "libx264",
+            "-preset", self.ENCODE_PRESET,
+            "-crf", str(self.X264_CRF),
+        ]
 
 
-# 全局单例，其他模块通过 from config import config 使用
-config = AppConfig()
+class ConfigProxy:
+    """Stable import target that can be bound once bootstrap has loaded config."""
+
+    def __init__(self) -> None:
+        object.__setattr__(self, "_value", None)
+
+    @property
+    def is_bound(self) -> bool:
+        return object.__getattribute__(self, "_value") is not None
+
+    def bind(self, value: AppConfig) -> None:
+        object.__setattr__(self, "_value", value)
+
+    def __getattr__(self, name: str):
+        value = object.__getattribute__(self, "_value")
+        if value is None:
+            raise RuntimeError("应用配置尚未绑定，请先调用 config.bind(AppConfig.from_file(...))")
+        return getattr(value, name)
+
+    def __setattr__(self, name: str, value) -> None:
+        current = object.__getattribute__(self, "_value")
+        if current is None:
+            raise RuntimeError("应用配置尚未绑定")
+        setattr(current, name, value)
+
+
+config = ConfigProxy()

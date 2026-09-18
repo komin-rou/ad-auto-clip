@@ -12,8 +12,6 @@ import time
 import json
 import shutil
 
-import requests
-
 from config import config
 from logger import logger
 from subtitle import format_srt_time, generate_srt as generate_srt_regex
@@ -36,22 +34,22 @@ SYSTEM_PROMPT = """你是一个专业的短视频字幕切分专家。你的任�
 【两行字幕示例 - 一条字幕内换行】
 1
 00:00:00,000 --> 00:00:03,200
-在毕节七星关区
-王大哥坐等雨棚师傅上门
+今天带大家看看施工现场
+师傅正在认真测量尺寸
 
 2
 00:00:03,350 --> 00:00:06,000
-我们自有两千平雨棚
-实体工厂配备专业设计师
+方案确认之后安排制作
+后续进度都会及时沟通
 
 【单行字幕示例】
 3
 00:00:06,150 --> 00:00:08,500
-给你家雨棚出三D效果图
+现场细节都为你拍清楚
 
 4
 00:00:08,650 --> 00:00:11,000
-方案确认好安心等安装
+确认无误之后安排安装
 """
 
 
@@ -75,6 +73,8 @@ def _call_deepseek_api(system_prompt: str, user_prompt: str) -> str:
     调用 DeepSeek Chat Completions API（OpenAI 兼容格式）
     返回模型回复的纯文本
     """
+    import requests
+
     url = f"{config.DEEPSEEK_BASE_URL.rstrip('/')}/chat/completions"
     headers = {
         "Authorization": f"Bearer {config.DEEPSEEK_API_KEY}",
@@ -95,6 +95,21 @@ def _call_deepseek_api(system_prompt: str, user_prompt: str) -> str:
     response.raise_for_status()
     data = response.json()
     return data["choices"][0]["message"]["content"].strip()
+
+
+def segment_caption_deepseek(text: str, max_chars: int) -> list[str]:
+    """Semantically split one overflowing caption without changing its text."""
+    system_prompt = (
+        "你是短视频字幕断句工具。把输入文字切成JSON字符串数组。"
+        "不得增删、改写或调换任何字符；拼接数组必须与原文完全一致。"
+        f"每个数组元素最多{max_chars}个字符。只输出JSON数组。"
+    )
+    raw = _call_deepseek_api(system_prompt, text)
+    cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw.strip(), flags=re.IGNORECASE)
+    payload = json.loads(cleaned)
+    if not isinstance(payload, list) or not all(isinstance(item, str) for item in payload):
+        raise ValueError("大模型字幕分段结果不是字符串数组")
+    return payload
 
 
 def _extract_srt_content(raw_text: str) -> str:
@@ -152,6 +167,8 @@ def generate_srt_deepseek(text: str, total_duration: float, output_path: str) ->
         logger.info("未配置 DeepSeek API Key，降级为正则分句")
         generate_srt_regex(text, total_duration, output_path)
         return False
+
+    import requests
 
     end_time = format_srt_time(total_duration)
     system_prompt = SYSTEM_PROMPT.format(end_time=end_time)
